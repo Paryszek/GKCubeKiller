@@ -7,12 +7,15 @@ var enemy = [];
 var PLAYABLE = true;
 var MAP_SIZE_WIDTH = 100;
 var MAP_SIZE_HEIGHT = 100;
-var LatestX = -30, LatestZ = 30; //Tree spawn latest position
+var LatestTreeX = -30, LatestTreeZ = 30; //Tree spawn latest position
 var LatestEnemyX = 60, LatestEnemyZ = -30; //Enemy spawn latest position
 var USE_WIREFRAME = false;
 var TREE_COUNT = 300;
-var ENEMY_COUNT = 4; // musi tak zostac
+var TREE_SPAWN_DISTANCE = 15;
+var ENEMY_COUNT = 4; // leave it
 var ENEMY_DOWN = false;
+var ENEMY_SPAWN_DISTANCE = 30;
+var ENEMY_WIN_DISTANCE = 5; // in what distance from the spawn for cubes to lose the game
 var HIT_BOX = 2;
 var AMMUNITION = 15;
 var AMMO_LESS = false;
@@ -25,57 +28,39 @@ var crosshairpositioning = { top: (HEIGHT / 2)-15, left: (WIDTH / 2)-2};
 function getRandomArbitrary(min, max) {
     return Math.random() * (max - min) + min;
 }
-function collision(EnemyPosZ,EnemyPosX,BulletPosZ,BulletPosX,id){
-  var distanceInX = Math.floor(EnemyPosX-BulletPosX);
-  var distanceInZ = Math.floor(EnemyPosZ-BulletPosZ);
+function didBulletHitEnemy(enemyPosZ,enemyPosX,bulletPosZ,bulletPosX,id){
+  var distanceInX = Math.floor(enemyPosX-bulletPosX);
+  var distanceInZ = Math.floor(enemyPosZ-bulletPosZ);
   if((distanceInX > -HIT_BOX && distanceInX < HIT_BOX) && (distanceInZ > -HIT_BOX && distanceInZ < HIT_BOX))
   {
     enemy[id].isDown = true;
   }
 }
-function outOfSpawnArea(nX, nZ){
-  if(!((-15 < nX && nX < 15) && (-15 < nZ && nZ < 15))){
+function outOfSpawnArea(positionX, positionZ, area){
+  if(!((-area < positionX && positionX < area) && (-area < positionZ && positionZ < area))){
       return true;
   }else { return false; }
 }
-//for enemy is he in spawn?
-function outOfSpawnAreaCHECK(nX, nZ,id){
-  //if(enemy[id].isDown == false){
-    if(!((-5 < nX && nX < 5) && (-5 < nZ && nZ < 5))){
+function isCubeInSpawn(positionX, positionZ,id){
+    if(!((-ENEMY_WIN_DISTANCE < positionX && positionX < ENEMY_WIN_DISTANCE) && (-ENEMY_WIN_DISTANCE < positionZ && positionZ < ENEMY_WIN_DISTANCE))){
         return true;
     }else { return false; }
-//  }
+
 }
-function outOfSpawnAreaENEMY(nX, nZ){
-  if(!((-30 < nX && nX < 30) && (-30 < nZ && nZ < 30))){
-      return true;
-  }else { return false; }
-}
-function isInMapArea(nX, nZ){
-  if((-MAP_SIZE_WIDTH < nX && nX < MAP_SIZE_WIDTH) && (-MAP_SIZE_HEIGHT < nZ && nZ < MAP_SIZE_HEIGHT)){
+function isInMapArea(positionX, positionZ){
+  if((-MAP_SIZE_WIDTH < positionZ && positionX < MAP_SIZE_WIDTH) && (-MAP_SIZE_HEIGHT < positionZ && positionZ < MAP_SIZE_HEIGHT)){
     return true;
   }else { return false };
 }
-function objSpawnCollision(lX,lZ,nX, nZ){
-  if((LatestX>nX || LatestX<nX) && (LatestZ>nZ || LatestZ<nZ)){
+function objSpawnCollision(latestZ,latestX,newestX, newestZ){
+  if((latestZ>newestX || latestX<newestX) && (latestZ>newestZ || latestZ<newestZ)){
     return true;
   }else { return false; }
 }
-function spawnRules(lX,lZ,nX, nZ){
-  if(isInMapArea(nX, nZ)){
-    if(outOfSpawnArea(nX, nZ)){
-      if(objSpawnCollision(lX,lZ,nX, nZ)){
-        return true;
-      }
-    }
-  }else{
-    return false;
-  }
-}
-function spawnRulesENEMY(lX,lZ,nX, nZ){
-  if(isInMapArea(nX, nZ)){
-    if(outOfSpawnAreaENEMY(nX, nZ)){
-      if(objSpawnCollision(lX,lZ,nX, nZ)){
+function spawnRules(latestX,latestZ,newestX, newestZ,area){
+  if(isInMapArea(newestX, newestZ)){
+    if(outOfSpawnArea(newestX, newestZ,area)){
+      if(objSpawnCollision(latestX,latestZ,newestX, newestZ)){
         return true;
       }
     }
@@ -95,22 +80,22 @@ var RESOURCES_LOADED = false;
 var LOADING_MANAGER = null;
 var models = {
 	tree: {
-		obj:"models/Large_Oak_Dark_01.obj",
-		mtl:"models/Large_Oak_Dark_01.mtl",
+		obj:"./models/Large_Oak_Dark_01.obj",
+		mtl:"./models/Large_Oak_Dark_01.mtl",
 		mesh: null,
     castShadow: false,
     receiveShadow: false,
 	},
   gun: {
-		obj:"models/uziGold.obj",
-		mtl:"models/uziGold.mtl",
+		obj:"./models/uziGold.obj",
+		mtl:"./models/uziGold.mtl",
 		mesh: null,
     castShadow: false,
     receiveShadow: false,
 	},
   tent: {
-    obj:"models/Tent_Poles_01.obj",
-    mtl:"models/Tent_Poles_01.mtl",
+    obj:"./models/Tent_Poles_01.obj",
+    mtl:"./models/Tent_Poles_01.mtl",
     mesh: null,
     castShadow: false,
     receiveShadow: false,
@@ -192,16 +177,16 @@ function init() {
 	}
 
   function onResourcesLoaded(){
-    //Loading a FOREST
+    //Loading a FOREST/TREES
     for(var i = 0; i<TREE_COUNT;i++){
     	meshes["tree"+i] = models.tree.mesh.clone();
       while(true){
         var randomX = getRandomArbitrary(-MAP_SIZE_WIDTH,MAP_SIZE_WIDTH);
         var randomZ = getRandomArbitrary(-MAP_SIZE_HEIGHT,MAP_SIZE_HEIGHT);
-        if(spawnRules(LatestX,LatestZ,randomX,randomZ)){
+        if(spawnRules(LatestTreeX,LatestTreeZ,randomX,randomZ,TREE_SPAWN_DISTANCE)){
         	meshes["tree"+i].position.set(randomX, 0, randomZ);
-          LatestX = randomX;
-          LatestZ = randomZ;
+          LatestTreeX = randomX;
+          LatestTreeZ = randomZ;
         	scene.add(meshes["tree"+i]);
           break;
         }
@@ -211,7 +196,7 @@ function init() {
     while(true){
       var randomX = Math.floor(getRandomArbitrary(-MAP_SIZE_WIDTH,MAP_SIZE_WIDTH));
       var randomZ = Math.floor(getRandomArbitrary(-MAP_SIZE_HEIGHT,MAP_SIZE_HEIGHT));
-      if(spawnRulesENEMY(LatestEnemyZ,LatestEnemyZ,randomX,randomZ)){
+      if(spawnRules(LatestEnemyZ,LatestEnemyZ,randomX,randomZ,ENEMY_SPAWN_DISTANCE)){
         enemy[i] = new THREE.Mesh(
           new THREE.BoxGeometry(1,1,1),
           new THREE.MeshPhongMaterial({color:0xff4444, wireframe:USE_WIREFRAME})
@@ -263,7 +248,12 @@ function animate() {
       return;
     }
     //ZWYCIESTWO
-    if(enemy[0].isDown&&enemy[1].isDown&&enemy[2].isDown&&enemy[3].isDown || AMMUNITION == 0){
+    if(enemy[0].isDown&&
+       enemy[1].isDown&&
+       enemy[2].isDown&&
+       enemy[3].isDown|| 
+       AMMUNITION == 0)
+    {
         requestAnimationFrame(animate);
         renderer.render(loadingScreen.scene, loadingScreen.camera);
         winOrLose.textContent = "Zwyciestwo - obroniles oboz";
@@ -271,7 +261,11 @@ function animate() {
         return;
     }
     //PORAZKA
-    if(!outOfSpawnAreaCHECK(enemy[0].position.x,enemy[0].position.z,0)||!outOfSpawnAreaCHECK(enemy[1].position.x,enemy[1].position.z,1)||!outOfSpawnAreaCHECK(enemy[2].position.x,enemy[2].position.z,2)||!outOfSpawnAreaCHECK(enemy[3].position.x,enemy[3].position.z,3)){
+    if(!isCubeInSpawn(enemy[0].position.x,enemy[0].position.z,0)||
+       !isCubeInSpawn(enemy[1].position.x,enemy[1].position.z,1)||
+       !isCubeInSpawn(enemy[2].position.x,enemy[2].position.z,2)||
+       !isCubeInSpawn(enemy[3].position.x,enemy[3].position.z,3))
+    {
       requestAnimationFrame(animate);
       renderer.render(loadingScreen.scene, loadingScreen.camera);
       winOrLose.textContent = "Porazka - wrog znajduje sie w obozie";
@@ -316,7 +310,6 @@ function animate() {
         if(enemy[3].position.y < 0) {
           enemy[3].position.x= -200;
           enemy[3].position.z= -200;
-
           scene.remove(enemy[3]);
         }
       }
@@ -354,7 +347,7 @@ function animate() {
       if(enemy[2].position.x > 0 && enemy[2].position.z > 0){
         enemy[2].position.x -= enemySpeed;
         enemy[2].position.z -= enemySpeed;
-      } else if(enemy[0].position.x > 0 && enemy[2].position.z < 0){
+      } else if(enemy[2].position.x > 0 && enemy[2].position.z < 0){
         enemy[2].position.x -= enemySpeed;
         enemy[2].position.z += enemySpeed;
       }else if(enemy[2].position.x < 0 && enemy[2].position.z > 0){
@@ -392,14 +385,19 @@ function animate() {
     var time = Date.now()*0.0005;
     var delta = clock.getDelta();
 
-  //pociski
+  //bullets
   for(var index=0; index<bullets.length; index+=1){
 		if( bullets[index] === undefined ) continue;
 		if( bullets[index].alive == false ){
 			continue;
 		}else{
       for(var i =0; i<ENEMY_COUNT;i++){
-        collision(enemy[i].position.z,enemy[i].position.x,bullets[index].position.z,bullets[index].position.x,i);
+        didBulletHitEnemy(
+          enemy[i].position.z,
+          enemy[i].position.x,
+          bullets[index].position.z,
+          bullets[index].position.x,i
+        );
       }
     }
 
