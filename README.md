@@ -8,3 +8,10 @@ e-mail: michal.parysz@yahoo.com
 demo: https://cubekiller.000webhostapp.com/
 
 youtube: https://www.youtube.com/watch?v=KDgJQlDwpiE
+
+WSAD - walking 
+Left Arrow - turn left
+Rigth Arrow - turn right
+Spacebar - shoot
+
+Kill the cubes before they reach your camp ;-)
